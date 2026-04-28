@@ -8,6 +8,11 @@ import { handleTextEditor, textEditorTool } from "./lesson-tools";
 const client = new Anthropic();
 const model = "claude-sonnet-4-6";
 
+const webSearchTool = {
+  type: "web_search_20260209",
+  name: "web_search",
+} as const;
+
 const allMessages: Anthropic.MessageParam[] = [];
 const storeResponses: Anthropic.Messages.Message[] = [];
 
@@ -20,6 +25,10 @@ Lessons live in the lessons/ folder (paths are relative to it). When the user as
 save, view, or update a lesson, use the tool — pick descriptive filenames like
 "hsk1/numbers.md" or "greetings.md". Use 'create' for new files, 'view' to read or list,
 'str_replace' for targeted edits, and 'insert' to add content at a specific line.
+
+You can also use web_search to look up current information from the internet —
+recent events, current chinese textbook recommendations, anything past your
+training cutoff. Cite sources when you do.
 `;
 
 const addUserMessage = (text: string) => {
@@ -50,7 +59,7 @@ const chat = async (messages: Anthropic.MessageParam[]): Promise<void> => {
       max_tokens: 1000,
       messages,
       system: systemPrompt,
-      tools: [getSystemTimeTool, textEditorTool],
+      tools: [getSystemTimeTool, textEditorTool, webSearchTool],
       // output_config: {
       //   format: zodOutputFormat(ChineseReplySchema),
       //   effort: 'low',
@@ -61,6 +70,13 @@ const chat = async (messages: Anthropic.MessageParam[]): Promise<void> => {
     storeResponses.push(final);
     messages.push({ role: "assistant", content: final.content });
 
+    for (const block of final.content) {
+      if (block.type === "server_tool_use" && block.name === "web_search") {
+        process.stderr.write(`\n[searched: ${(block.input as { query: string }).query}]\n`);
+      }
+    }
+
+    if (final.stop_reason === "pause_turn") continue;
     if (final.stop_reason !== "tool_use") return;
 
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
