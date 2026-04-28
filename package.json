@@ -8,6 +8,7 @@
     "chunk": "tsx src/rag/chunkLessons.ts",
     "embed": "node --env-file=.env --import tsx src/rag/embeddings.ts",
     "store": "node --env-file=.env --import tsx src/rag/store.ts",
+    "search": "node --env-file=.env --import tsx src/rag/search.ts",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down"
   },

@@ -26,6 +26,15 @@ export const embedChunks = async (
   return chunks.map((c, i) => ({ ...c, embedding: data[i]!.embedding! }));
 };
 
+export const embedQuery = async (text: string): Promise<number[]> => {
+  const response = await client.embed({
+    input: text,
+    model: "voyage-3",
+    inputType: "query",
+  });
+  return response.data?.[0]?.embedding ?? [];
+};
+
 const isMain = import.meta.url === `file://${process.argv[1]}`;
 if (isMain) {
   const chunks = await loadAndChunk();
