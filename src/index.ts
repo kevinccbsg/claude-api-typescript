@@ -2,16 +2,12 @@ import Anthropic from "@anthropic-ai/sdk";
 import readline from "node:readline/promises";
 import { ChineseReplySchema, type ChineseReply } from "./schemas";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod.js";
+import { getSystemTime, getSystemTimeTool } from "./tools";
 
 const client = new Anthropic();
 const model = "claude-sonnet-4-6";
 
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-}
-
-const allMessages: Message[] = [];
+const allMessages: Anthropic.MessageParam[] = [];
 const storeResponses: Anthropic.Messages.Message[] = [];
 
 const systemPrompt = `
@@ -23,29 +19,46 @@ const addUserMessage = (text: string) => {
   allMessages.push({ role: "user", content: text });
 };
 
-const addAssistantMessage = (text: string) => {
-  allMessages.push({ role: "assistant", content: text });
+const executeTool = (name: string, input: unknown): string => {
+  if (name === "get_system_time") {
+    return JSON.stringify(getSystemTime());
+  }
+  return JSON.stringify({ error: `Unknown tool: ${name}` });
 };
 
-const chat = async (messages: Message[]): Promise<string> => {
-  let text = "";
-  const stream = client.messages.stream({
-    model,
-    max_tokens: 1000,
-    messages,
-    system: systemPrompt,
-    // output_config: {
-    //   format: zodOutputFormat(ChineseReplySchema),
-    //   effort: 'low',
-    // },
-  });
-  stream.on("text", (delta) => {
-    text += delta;
-    process.stdout.write(delta);
-  });
-  const final = await stream.finalMessage();
-  storeResponses.push(final);
-  return text;
+const chat = async (messages: Anthropic.MessageParam[]): Promise<void> => {
+  while (true) {
+    const stream = client.messages.stream({
+      model,
+      max_tokens: 1000,
+      messages,
+      system: systemPrompt,
+      tools: [getSystemTimeTool],
+      // output_config: {
+      //   format: zodOutputFormat(ChineseReplySchema),
+      //   effort: 'low',
+      // },
+    });
+    stream.on("text", (delta) => process.stdout.write(delta));
+    const final = await stream.finalMessage();
+    storeResponses.push(final);
+    messages.push({ role: "assistant", content: final.content });
+
+    if (final.stop_reason !== "tool_use") return;
+
+    const toolResults: Anthropic.ToolResultBlockParam[] = [];
+    for (const block of final.content) {
+      if (block.type === "tool_use") {
+        toolResults.push({
+          type: "tool_result",
+          tool_use_id: block.id,
+          content: executeTool(block.name, block.input),
+        });
+      }
+    }
+    messages.push({ role: "user", content: toolResults });
+    process.stdout.write("\n");
+  }
 };
 
 const main = async () => {
@@ -70,10 +83,8 @@ const main = async () => {
     addUserMessage(userInput);
 
     process.stdout.write("\nAssistant: ");
-    const assistantText = await chat(allMessages);
+    await chat(allMessages);
     process.stdout.write("\n\n");
-
-    addAssistantMessage(assistantText);
   }
 
   rl.close();
