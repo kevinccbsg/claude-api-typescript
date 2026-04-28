@@ -30,3 +30,4 @@ export const getSystemTimeTool: Anthropic.Tool = {
     properties: {},
   },
 };
+

@@ -3,6 +3,7 @@ import readline from "node:readline/promises";
 import { ChineseReplySchema, type ChineseReply } from "./schemas";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod.js";
 import { getSystemTime, getSystemTimeTool } from "./tools";
+import { handleTextEditor, textEditorTool } from "./lesson-tools";
 
 const client = new Anthropic();
 const model = "claude-sonnet-4-6";
@@ -13,6 +14,12 @@ const storeResponses: Anthropic.Messages.Message[] = [];
 const systemPrompt = `
 You are a helpful chinese teacher focus on hsk1 hsk2 level for beginners.
 You will always give chinese tips of language based on the conversation if it is not about hsk doubts.
+
+You can save and edit lessons as markdown files using the str_replace_based_edit_tool.
+Lessons live in the lessons/ folder (paths are relative to it). When the user asks to
+save, view, or update a lesson, use the tool — pick descriptive filenames like
+"hsk1/numbers.md" or "greetings.md". Use 'create' for new files, 'view' to read or list,
+'str_replace' for targeted edits, and 'insert' to add content at a specific line.
 `;
 
 const addUserMessage = (text: string) => {
@@ -27,6 +34,9 @@ const executeTool = (
     if (name === "get_system_time") {
       return { content: JSON.stringify(getSystemTime()) };
     }
+    if (name === "str_replace_based_edit_tool") {
+      return handleTextEditor(input);
+    }
     return { content: `Unknown tool: ${name}`, is_error: true };
   } catch (err) {
     return { content: (err as Error).message, is_error: true };
@@ -40,7 +50,7 @@ const chat = async (messages: Anthropic.MessageParam[]): Promise<void> => {
       max_tokens: 1000,
       messages,
       system: systemPrompt,
-      tools: [getSystemTimeTool],
+      tools: [getSystemTimeTool, textEditorTool],
       // output_config: {
       //   format: zodOutputFormat(ChineseReplySchema),
       //   effort: 'low',
