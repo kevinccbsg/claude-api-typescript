@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node --env-file=.env --import tsx src/index.ts"
+    "start": "node --env-file=.env --import tsx src/index.ts",
+    "chunk": "tsx src/rag/chunkLessons.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
