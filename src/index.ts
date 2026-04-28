@@ -19,11 +19,18 @@ const addUserMessage = (text: string) => {
   allMessages.push({ role: "user", content: text });
 };
 
-const executeTool = (name: string, input: unknown): string => {
-  if (name === "get_system_time") {
-    return JSON.stringify(getSystemTime());
+const executeTool = (
+  name: string,
+  input: unknown,
+): { content: string; is_error?: boolean } => {
+  try {
+    if (name === "get_system_time") {
+      return { content: JSON.stringify(getSystemTime()) };
+    }
+    return { content: `Unknown tool: ${name}`, is_error: true };
+  } catch (err) {
+    return { content: (err as Error).message, is_error: true };
   }
-  return JSON.stringify({ error: `Unknown tool: ${name}` });
 };
 
 const chat = async (messages: Anthropic.MessageParam[]): Promise<void> => {
@@ -49,10 +56,12 @@ const chat = async (messages: Anthropic.MessageParam[]): Promise<void> => {
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
     for (const block of final.content) {
       if (block.type === "tool_use") {
+        const result = executeTool(block.name, block.input);
         toolResults.push({
           type: "tool_result",
           tool_use_id: block.id,
-          content: executeTool(block.name, block.input),
+          content: result.content,
+          is_error: result.is_error,
         });
       }
     }
