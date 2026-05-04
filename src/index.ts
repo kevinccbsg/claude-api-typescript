@@ -57,7 +57,23 @@ const chat = async (messages: Anthropic.MessageParam[]): Promise<void> => {
     const stream = client.messages.stream({
       model,
       max_tokens: 4000,
-      messages,
+      messages: [
+        ...messages,
+        // Example of using a document as user content
+        // {
+        //   role: "user",
+        //   content: [
+        //     {
+        //       type: "document",
+        //       source: {
+        //         type: "url",
+        //         url: "https://www.google.com",
+        //       },
+        //       citations: { enabled: true },
+        //     },
+        //   ]
+        // },
+      ],
       system: systemPrompt,
       // thinking: {
       //   type: "adaptive",
