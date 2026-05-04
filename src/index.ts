@@ -56,9 +56,12 @@ const chat = async (messages: Anthropic.MessageParam[]): Promise<void> => {
   while (true) {
     const stream = client.messages.stream({
       model,
-      max_tokens: 1000,
+      max_tokens: 4000,
       messages,
       system: systemPrompt,
+      // thinking: {
+      //   type: "adaptive",
+      // },
       tools: [getSystemTimeTool, textEditorTool, webSearchTool],
       // output_config: {
       //   format: zodOutputFormat(ChineseReplySchema),
@@ -71,14 +74,18 @@ const chat = async (messages: Anthropic.MessageParam[]): Promise<void> => {
     messages.push({ role: "assistant", content: final.content });
 
     for (const block of final.content) {
+      if (block.type === "thinking") {
+        process.stderr.write(`\n[thinking]\n${block.thinking}\n[/thinking]\n`);
+      }
       if (block.type === "server_tool_use" && block.name === "web_search") {
         process.stderr.write(`\n[searched: ${(block.input as { query: string }).query}]\n`);
       }
     }
+    process.stderr.write(`\n[stop: ${final.stop_reason}]\n`);
 
-    if (final.stop_reason === "pause_turn") continue;
-    if (final.stop_reason !== "tool_use") return;
-
+    // ALWAYS pair tool_use with tool_result based on content, not stop_reason.
+    // Otherwise max_tokens (or any non-tool_use stop) with a tool_use block in
+    // the response orphans the tool call and corrupts the conversation history.
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
     for (const block of final.content) {
       if (block.type === "tool_use") {
@@ -91,8 +98,14 @@ const chat = async (messages: Anthropic.MessageParam[]): Promise<void> => {
         });
       }
     }
-    messages.push({ role: "user", content: toolResults });
-    process.stdout.write("\n");
+    if (toolResults.length > 0) {
+      messages.push({ role: "user", content: toolResults });
+      process.stdout.write("\n");
+    }
+
+    if (final.stop_reason === "tool_use") continue;
+    if (final.stop_reason === "pause_turn") continue;
+    return;
   }
 };
 

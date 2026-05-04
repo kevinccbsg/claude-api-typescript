@@ -3,3 +3,4 @@ node_modules/
 *.log
 .serena/
 chinese-books/*.pdf
+.DS_Store
